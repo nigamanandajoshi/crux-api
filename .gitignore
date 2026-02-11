@@ -1,0 +1,36 @@
+# ── Secrets ─────────────────────────────
+.env
+
+# ── Python ──────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# ── Virtual Environment ────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── IDE / Editor ────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# ── OS Files ────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Test / Debug ────────────────────────
+test_agent.py
+*.log
