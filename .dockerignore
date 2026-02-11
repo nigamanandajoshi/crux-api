@@ -2,3 +2,16 @@
 .venv
 __pycache__
 .git
+.github
+.pytest_cache
+.mypy_cache
+.ruff_cache
+htmlcov/
+coverage.xml
+.coverage
+tests/
+test_agent.py
+*.md
+!SKILL.md
+.pre-commit-config.yaml
+.secrets.baseline

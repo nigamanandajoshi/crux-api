@@ -91,14 +91,17 @@ def test_url_validation_blocks_metadata_endpoint(client):
     assert response.status_code == 422
 
 
-def test_url_validation_allows_valid_https(client):
-    """Test that valid HTTPS URLs pass validation (but may fail at fetch)."""
-    # This will fail at the fetch stage, but should pass validation
+@patch("main.fetch_via_jina")
+def test_url_validation_allows_valid_https(mock_fetch, client):
+    """Test that valid HTTPS URLs pass validation (mocked fetch)."""
+    # Mock successful fetch to avoid network call
+    mock_fetch.return_value = "Mock content"
+
     response = client.post("/api/squeeze", json={
         "url": "https://example.com"
     })
-    # Could be 502 (fetch failed) or 200 (if it works), but not 422 (validation)
-    assert response.status_code != 422
+    # Should be 200 since we mocked success, definitely not 422
+    assert response.status_code == 200
 
 
 # ── Error Handling ───────────────────────────────────────────────────────────
@@ -178,13 +181,18 @@ async def test_filter_with_groq_no_key():
 
 # ── Integration-like Tests ───────────────────────────────────────────────────
 def test_squeeze_endpoint_structure(client):
-    """Test that squeeze endpoint returns correct structure (even if fetch fails)."""
-    # This will likely fail at the fetch stage, but we can check error structure
-    response = client.post("/api/squeeze", json={
-        "url": "https://httpbin.org/status/404"
-    })
+    """Test that squeeze endpoint returns correct structure (mocked error)."""
+    with patch("main.fetch_via_jina") as mock_fetch:
+        # Simulate an error from Jina/fetch
+        from fastapi import HTTPException
+        mock_fetch.side_effect = HTTPException(status_code=502, detail="Jina Gateway Error")
 
-    # Check that we get a proper error response
-    if response.status_code != 200:
+        response = client.post("/api/squeeze", json={
+            "url": "https://httpbin.org/status/404"
+        })
+
+        # Check that we get a proper error response (502)
+        assert response.status_code == 502
         data = response.json()
         assert "error" in data or "detail" in data
+
