@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Doc-Squeeze — Knowledge Extraction API</title>
+    <meta name="description"
+        content="Knowledge extraction API for AI agents. Fetch docs, extract structured JSON, batch-process URLs, and search within documents.">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <style>
+        *,
+        *::before,
+        *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #08090d;
+            --bg-card: rgba(255, 255, 255, 0.03);
+            --bg-card-hover: rgba(255, 255, 255, 0.06);
+            --border: rgba(255, 255, 255, 0.08);
+            --border-focus: rgba(139, 92, 246, 0.5);
+            --text-primary: #e8e8ee;
+            --text-secondary: #8b8b9e;
+            --text-muted: #55556a;
+            --accent-purple: #8b5cf6;
+            --accent-blue: #3b82f6;
+            --accent-cyan: #06b6d4;
+            --accent-green: #10b981;
+            --accent-orange: #f59e0b;
+            --accent-red: #ef4444;
+            --gradient-main: linear-gradient(135deg, #8b5cf6 0%, #3b82f6 50%, #06b6d4 100%);
+            --gradient-bg: radial-gradient(ellipse at 20% 0%, rgba(139, 92, 246, 0.12) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 100%, rgba(6, 182, 212, 0.08) 0%, transparent 60%);
+            --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+            --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+            --radius: 12px;
+            --radius-lg: 16px;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: var(--gradient-bg);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem 4rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* ── Header ── */
+        .header {
+            text-align: center;
+            padding: 3rem 0 2rem;
+        }
+
+        .logo {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .header h1 {
+            font-size: 2.8rem;
+            font-weight: 800;
+            background: var(--gradient-main);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.03em;
+        }
+
+        .header .tagline {
+            color: var(--text-secondary);
+            font-size: 1.05rem;
+            margin-top: 0.5rem;
+        }
+
+        /* ── Status Bar ── */
+        .status-bar {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin: 1.5rem 0 2.5rem;
+        }
+
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.35rem 0.8rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .dot.warn {
+            background: var(--accent-orange);
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
+        }
+
+        /* ── Playground Card ── */
+        .playground {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .playground-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.25rem;
+        }
+
+        .playground-title {
+            font-weight: 700;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        /* ── Endpoint Tabs ── */
+        .endpoint-tabs {
+            display: flex;
+            gap: 0.25rem;
+            margin-bottom: 1.25rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 3px;
+        }
+
+        .endpoint-tab {
+            flex: 1;
+            padding: 0.5rem 0.5rem;
+            text-align: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            background: transparent;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .endpoint-tab:hover {
+            color: var(--text-secondary);
+        }
+
+        .endpoint-tab.active {
+            background: rgba(139, 92, 246, 0.15);
+            color: var(--accent-purple);
+        }
+
+        .endpoint-tab .tab-method {
+            display: block;
+            font-size: 0.6rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            opacity: 0.6;
+            margin-bottom: 2px;
+        }
+
+        /* ── Forms ── */
+        .form-field {
+            margin-bottom: 1rem;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin-bottom: 0.4rem;
+        }
+
+        .text-input,
+        .textarea-input {
+            width: 100%;
+            padding: 0.65rem 0.9rem;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .textarea-input {
+            min-height: 80px;
+            resize: vertical;
+            font-size: 0.8rem;
+        }
+
+        .text-input:focus,
+        .textarea-input:focus {
+            border-color: var(--border-focus);
+        }
+
+        .text-input::placeholder,
+        .textarea-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* ── Buttons ── */
+        .btn-row {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            flex: 1;
+            padding: 0.7rem 1.5rem;
+            background: var(--gradient-main);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.1s;
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+        }
+
+        .btn-primary:active {
+            transform: scale(0.98);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            padding: 0.7rem 1.25rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-card-hover);
+            color: var(--text-primary);
+        }
+
+        /* ── Result Area ── */
+        .result-area {
+            margin-top: 1.25rem;
+            display: none;
+        }
+
+        .result-area.visible {
+            display: block;
+        }
+
+        .result-meta {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            margin-bottom: 0.75rem;
+        }
+
+        .meta-chip {
+            font-size: 0.7rem;
+            padding: 0.2rem 0.6rem;
+            background: rgba(139, 92, 246, 0.1);
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            border-radius: 999px;
+            color: var(--accent-purple);
+            font-weight: 500;
+        }
+
+        .meta-chip.cache-hit {
+            background: rgba(16, 185, 129, 0.1);
+            border-color: rgba(16, 185, 129, 0.2);
+            color: var(--accent-green);
+        }
+
+        .meta-chip.cache-miss {
+            background: rgba(245, 158, 11, 0.1);
+            border-color: rgba(245, 158, 11, 0.2);
+            color: var(--accent-orange);
+        }
+
+        .result-content {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        /* ── Code Snippet Section ── */
+        .snippets {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            margin-bottom: 2rem;
+        }
+
+        .snippet-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .snippet-tab {
+            flex: 1;
+            padding: 0.6rem;
+            text-align: center;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-bottom: 2px solid transparent;
+        }
+
+        .snippet-tab:hover {
+            color: var(--text-secondary);
+        }
+
+        .snippet-tab.active {
+            color: var(--accent-purple);
+            border-bottom-color: var(--accent-purple);
+        }
+
+        .snippet-content {
+            position: relative;
+            padding: 1rem;
+        }
+
+        .snippet-code {
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            white-space: pre;
+            overflow-x: auto;
+        }
+
+        .snippet-copy {
+            position: absolute;
+            top: 0.75rem;
+            right: 0.75rem;
+            padding: 0.3rem 0.6rem;
+            background: var(--bg-card-hover);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .snippet-copy:hover {
+            color: var(--text-primary);
+            border-color: var(--accent-purple);
+        }
+
+        /* ── Endpoint Grid ── */
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        .endpoint-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 0.75rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .endpoint-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1rem;
+            transition: all 0.2s;
+        }
+
+        .endpoint-card:hover {
+            background: var(--bg-card-hover);
+            border-color: rgba(139, 92, 246, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .endpoint-card .method {
+            display: inline-block;
+            font-size: 0.6rem;
+            font-weight: 700;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.4rem;
+        }
+
+        .method-post {
+            background: rgba(139, 92, 246, 0.15);
+            color: var(--accent-purple);
+        }
+
+        .method-get {
+            background: rgba(6, 182, 212, 0.15);
+            color: var(--accent-cyan);
+        }
+
+        .method-delete {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--accent-red);
+        }
+
+        .endpoint-card .path {
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .endpoint-card .desc {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.3rem;
+        }
+
+        .endpoint-card .tag {
+            display: inline-block;
+            font-size: 0.6rem;
+            padding: 0.1rem 0.4rem;
+            background: rgba(59, 130, 246, 0.1);
+            border-radius: 4px;
+            color: var(--accent-blue);
+            margin-top: 0.4rem;
+            font-weight: 500;
+        }
+
+        /* ── Discovery Links ── */
+        .discovery-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .disc-link {
+            padding: 0.4rem 0.8rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.75rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .disc-link:hover {
+            border-color: var(--accent-purple);
+            color: var(--accent-purple);
+        }
+
+        /* ── Footer ── */
+        .footer {
+            text-align: center;
+            padding: 2rem 0;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        .footer a {
+            color: var(--accent-purple);
+            text-decoration: none;
+        }
+
+        /* ── Loader ── */
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            margin-right: 0.4rem;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* ── Hidden ── */
+        .hidden {
+            display: none !important;
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 600px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .endpoint-tabs {
+                flex-wrap: wrap;
+            }
+
+            .endpoint-tab {
+                min-width: 45%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">🗜️</div>
+            <h1>Doc-Squeeze</h1>
+            <p class="tagline">Knowledge extraction API for AI agents — powered by Jina + Groq</p>
+        </header>
+
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <div class="status-pill">
+                <span class="dot" id="apiDot"></span>
+                <span id="apiStatus">API: Checking…</span>
+            </div>
+            <div class="status-pill">
+                <span class="dot" id="groqDot"></span>
+                <span id="groqStatus">Groq: Checking…</span>
+            </div>
+            <div class="status-pill">
+                <span id="cacheInfo">Cache: —</span>
+            </div>
+            <div class="status-pill" id="versionPill">v1.0.0</div>
+        </div>
+
+        <!-- API Playground -->
+        <div class="playground">
+            <div class="playground-header">
+                <span class="playground-title">⚡ API Playground</span>
+            </div>
+
+            <!-- Endpoint Selector -->
+            <div class="endpoint-tabs" id="endpointTabs">
+                <button class="endpoint-tab active" data-endpoint="squeeze">
+                    <span class="tab-method">POST</span>
+                    Squeeze
+                </button>
+                <button class="endpoint-tab" data-endpoint="extract">
+                    <span class="tab-method">POST</span>
+                    Extract
+                </button>
+                <button class="endpoint-tab" data-endpoint="search">
+                    <span class="tab-method">POST</span>
+                    Search
+                </button>
+                <button class="endpoint-tab" data-endpoint="batch">
+                    <span class="tab-method">POST</span>
+                    Batch
+                </button>
+            </div>
+
+            <!-- Squeeze Form -->
+            <div id="form-squeeze" class="endpoint-form">
+                <div class="form-field">
+                    <label class="form-label">URL *</label>
+                    <input type="url" id="squeezeUrl" class="text-input"
+                        placeholder="https://docs.stripe.com/api/authentication">
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Focus (optional)</label>
+                    <input type="text" id="squeezeFocus" class="text-input" placeholder="e.g. Python API key setup">
+                </div>
+            </div>
+
+            <!-- Extract Form -->
+            <div id="form-extract" class="endpoint-form hidden">
+                <div class="form-field">
+                    <label class="form-label">URL *</label>
+                    <input type="url" id="extractUrl" class="text-input" placeholder="https://docs.stripe.com/api">
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Schema (JSON) *</label>
+                    <textarea id="extractSchema" class="textarea-input"
+                        placeholder='{"endpoints": [{"method": "str", "path": "str"}], "auth_methods": ["str"]}'></textarea>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Instructions (optional)</label>
+                    <input type="text" id="extractInstructions" class="text-input"
+                        placeholder="e.g. Focus on REST endpoints only">
+                </div>
+            </div>
+
+            <!-- Search Form -->
+            <div id="form-search" class="endpoint-form hidden">
+                <div class="form-field">
+                    <label class="form-label">URL *</label>
+                    <input type="url" id="searchUrl" class="text-input"
+                        placeholder="https://docs.python.org/3/library/asyncio.html">
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Query *</label>
+                    <input type="text" id="searchQuery" class="text-input"
+                        placeholder="How do I run multiple coroutines concurrently?">
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Max Results</label>
+                    <input type="number" id="searchMaxResults" class="text-input" value="3" min="1" max="10"
+                        style="max-width:100px">
+                </div>
+            </div>
+
+            <!-- Batch Form -->
+            <div id="form-batch" class="endpoint-form hidden">
+                <div class="form-field">
+                    <label class="form-label">URLs (one per line, max 10) *</label>
+                    <textarea id="batchUrls" class="textarea-input"
+                        placeholder="https://docs.stripe.com/api/authentication&#10;https://docs.stripe.com/api/errors&#10;https://docs.stripe.com/api/rate-limits"></textarea>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Focus (optional, applied to all)</label>
+                    <input type="text" id="batchFocus" class="text-input" placeholder="e.g. error handling">
+                </div>
+            </div>
+
+            <!-- Buttons -->
+            <div class="btn-row">
+                <button class="btn-primary" id="btnRun">Squeeze →</button>
+                <button class="btn-secondary" id="btnClear">Clear</button>
+            </div>
+
+            <!-- Result Area -->
+            <div class="result-area" id="resultArea">
+                <div class="result-meta" id="resultMeta"></div>
+                <div class="result-content" id="resultContent"></div>
+            </div>
+        </div>
+
+        <!-- Code Snippets -->
+        <div class="snippets">
+            <div class="snippet-tabs">
+                <button class="snippet-tab active" data-lang="curl">cURL</button>
+                <button class="snippet-tab" data-lang="python">Python</button>
+                <button class="snippet-tab" data-lang="javascript">JavaScript</button>
+            </div>
+            <div class="snippet-content">
+                <button class="snippet-copy" id="btnCopy">Copy</button>
+                <pre class="snippet-code" id="snippetCode"></pre>
+            </div>
+        </div>
+
+        <!-- Endpoints Grid -->
+        <h2 class="section-title">📡 Endpoints</h2>
+        <div class="endpoint-grid">
+            <div class="endpoint-card">
+                <span class="method method-post">POST</span>
+                <div class="path">/api/squeeze</div>
+                <div class="desc">Fetch URL as clean markdown with optional topic filter</div>
+                <span class="tag">core</span>
+            </div>
+            <div class="endpoint-card">
+                <span class="method method-post">POST</span>
+                <div class="path">/api/extract</div>
+                <div class="desc">Extract structured JSON using a schema definition</div>
+                <span class="tag">extraction</span>
+            </div>
+            <div class="endpoint-card">
+                <span class="method method-post">POST</span>
+                <div class="path">/api/search</div>
+                <div class="desc">Deep search within a doc for specific answers</div>
+                <span class="tag">search</span>
+            </div>
+            <div class="endpoint-card">
+                <span class="method method-post">POST</span>
+                <div class="path">/api/batch</div>
+                <div class="desc">Fetch multiple URLs in parallel (up to 10)</div>
+                <span class="tag">batch</span>
+            </div>
+            <div class="endpoint-card">
+                <span class="method method-get">GET</span>
+                <div class="path">/api/cache/stats</div>
+                <div class="desc">Cache hit rate, entries, uptime</div>
+                <span class="tag">cache</span>
+            </div>
+            <div class="endpoint-card">
+                <span class="method method-post">POST</span>
+                <div class="path">/api/keys/create</div>
+                <div class="desc">Generate an API key for higher rate limits</div>
+                <span class="tag">keys</span>
+            </div>
+            <div class="endpoint-card">
+                <span class="method method-get">GET</span>
+                <div class="path">/health</div>
+                <div class="desc">Service health, cache stats, config</div>
+                <span class="tag">health</span>
+            </div>
+            <div class="endpoint-card">
+                <span class="method method-get">GET</span>
+                <div class="path">/docs</div>
+                <div class="desc">Interactive Swagger/OpenAPI docs</div>
+                <span class="tag">docs</span>
+            </div>
+        </div>
+
+        <!-- Discovery -->
+        <h2 class="section-title">🤖 Agent Discovery</h2>
+        <div class="discovery-links">
+            <a href="/.well-known/ai-plugin.json" class="disc-link" target="_blank">OpenAI Plugin ↗</a>
+            <a href="/.well-known/mcp.json" class="disc-link" target="_blank">MCP Discovery ↗</a>
+            <a href="/api/skill" class="disc-link" target="_blank">OpenClaw Manifest ↗</a>
+            <a href="/openapi.json" class="disc-link" target="_blank">OpenAPI Spec ↗</a>
+            <a href="/docs" class="disc-link" target="_blank">Swagger UI ↗</a>
+        </div>
+
+        <footer class="footer">
+            Doc-Squeeze v1.0.0 · <a href="https://github.com/openclaw/doc-squeeze">GitHub</a> · MIT License
+        </footer>
+    </div>
+
+    <script>
+        const BASE = window.location.origin;
+        let activeEndpoint = 'squeeze';
+        let activeLang = 'curl';
+
+        // ── Status Check ──
+        async function checkStatus() {
+            try {
+                const resp = await fetch(`${BASE}/health`);
+                const data = await resp.json();
+                document.getElementById('apiDot').className = 'dot';
+                document.getElementById('apiStatus').textContent = 'API: Online';
+                document.getElementById('groqDot').className = data.groq_configured ? 'dot' : 'dot warn';
+                document.getElementById('groqStatus').textContent = data.groq_configured ? 'Groq: Active' : 'Groq: Off';
+                if (data.cache) {
+                    document.getElementById('cacheInfo').textContent = `Cache: ${data.cache.hit_rate_percent}% hit · ${data.cache.entries} entries`;
+                }
+                document.getElementById('versionPill').textContent = `v${data.version || '1.0.0'}`;
+            } catch {
+                document.getElementById('apiDot').className = 'dot warn';
+                document.getElementById('apiStatus').textContent = 'API: Offline';
+            }
+        }
+        checkStatus();
+        setInterval(checkStatus, 30000);
+
+        // ── Endpoint Tab Switching ──
+        document.getElementById('endpointTabs').addEventListener('click', (e) => {
+            const tab = e.target.closest('.endpoint-tab');
+            if (!tab) return;
+            document.querySelectorAll('.endpoint-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            activeEndpoint = tab.dataset.endpoint;
+
+            document.querySelectorAll('.endpoint-form').forEach(f => f.classList.add('hidden'));
+            document.getElementById(`form-${activeEndpoint}`).classList.remove('hidden');
+
+            const labels = { squeeze: 'Squeeze →', extract: 'Extract →', search: 'Search →', batch: 'Batch →' };
+            document.getElementById('btnRun').textContent = labels[activeEndpoint];
+
+            updateSnippet();
+        });
+
+        // ── Build request payload ──
+        function getPayload() {
+            switch (activeEndpoint) {
+                case 'squeeze': {
+                    const url = document.getElementById('squeezeUrl').value.trim();
+                    const focus = document.getElementById('squeezeFocus').value.trim();
+                    if (!url) return null;
+                    const p = { url };
+                    if (focus) p.focus = focus;
+                    return p;
+                }
+                case 'extract': {
+                    const url = document.getElementById('extractUrl').value.trim();
+                    const schema = document.getElementById('extractSchema').value.trim();
+                    if (!url || !schema) return null;
+                    try {
+                        const p = { url, schema_definition: JSON.parse(schema) };
+                        const inst = document.getElementById('extractInstructions').value.trim();
+                        if (inst) p.instructions = inst;
+                        return p;
+                    } catch { alert('Invalid JSON in schema field'); return null; }
+                }
+                case 'search': {
+                    const url = document.getElementById('searchUrl').value.trim();
+                    const query = document.getElementById('searchQuery').value.trim();
+                    if (!url || !query) return null;
+                    return { url, query, max_results: parseInt(document.getElementById('searchMaxResults').value) || 3 };
+                }
+                case 'batch': {
+                    const raw = document.getElementById('batchUrls').value.trim();
+                    if (!raw) return null;
+                    const urls = raw.split('\n').map(u => u.trim()).filter(Boolean);
+                    const p = { urls };
+                    const focus = document.getElementById('batchFocus').value.trim();
+                    if (focus) p.focus = focus;
+                    return p;
+                }
+            }
+        }
+
+        function getApiPath() {
+            const paths = { squeeze: '/api/squeeze', extract: '/api/extract', search: '/api/search', batch: '/api/batch' };
+            return paths[activeEndpoint];
+        }
+
+        // ── Run Request ──
+        document.getElementById('btnRun').addEventListener('click', async () => {
+            const payload = getPayload();
+            if (!payload) { alert('Please fill in all required fields'); return; }
+
+            const btn = document.getElementById('btnRun');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>Working…';
+
+            try {
+                const resp = await fetch(`${BASE}${getApiPath()}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const data = await resp.json();
+
+                const meta = document.getElementById('resultMeta');
+                const content = document.getElementById('resultContent');
+                const area = document.getElementById('resultArea');
+
+                // Build meta chips
+                let chips = '';
+                if (data.timing) chips += `<span class="meta-chip">${data.timing.total_ms}ms</span>`;
+                if (data.char_count) chips += `<span class="meta-chip">${data.char_count.toLocaleString()} chars</span>`;
+                if (data.cached !== undefined) {
+                    chips += `<span class="meta-chip ${data.cached ? 'cache-hit' : 'cache-miss'}">${data.cached ? '⚡ Cache HIT' : '🔄 Cache MISS'}</span>`;
+                }
+                if (data.confidence) chips += `<span class="meta-chip">${(data.confidence * 100).toFixed(0)}% confidence</span>`;
+                if (data.model_used) chips += `<span class="meta-chip">${data.model_used}</span>`;
+                if (data.successful !== undefined) chips += `<span class="meta-chip">${data.successful}/${data.total_urls} successful</span>`;
+                meta.innerHTML = chips;
+
+                // Format content
+                if (data.markdown) {
+                    content.textContent = data.markdown;
+                } else if (data.data) {
+                    content.textContent = JSON.stringify(data.data, null, 2);
+                } else if (data.results) {
+                    content.textContent = JSON.stringify(data.results, null, 2);
+                } else {
+                    content.textContent = JSON.stringify(data, null, 2);
+                }
+
+                area.classList.add('visible');
+                checkStatus(); // Refresh cache stats
+            } catch (err) {
+                alert(`Request failed: ${err.message}`);
+            } finally {
+                const labels = { squeeze: 'Squeeze →', extract: 'Extract →', search: 'Search →', batch: 'Batch →' };
+                btn.textContent = labels[activeEndpoint];
+                btn.disabled = false;
+            }
+        });
+
+        // ── Clear ──
+        document.getElementById('btnClear').addEventListener('click', () => {
+            document.querySelectorAll('.text-input, .textarea-input').forEach(i => {
+                if (i.type === 'number') i.value = '3';
+                else i.value = '';
+            });
+            document.getElementById('resultArea').classList.remove('visible');
+            updateSnippet();
+        });
+
+        // ── Code Snippets ──
+        function updateSnippet() {
+            const payload = getPayload();
+            const path = getApiPath();
+            const body = payload ? JSON.stringify(payload, null, 2) : JSON.stringify({ url: "https://example.com" }, null, 2);
+            const bodyInline = payload ? JSON.stringify(payload) : '{"url":"https://example.com"}';
+
+            const snippets = {
+                curl: `curl -X POST ${BASE}${path} \\\n  -H "Content-Type: application/json" \\\n  -d '${bodyInline}'`,
+                python: `import requests\n\nresp = requests.post("${BASE}${path}", json=${body.replace(/"/g, '"')})\n\ndata = resp.json()\nprint(data["status"])`,
+                javascript: `const resp = await fetch("${BASE}${path}", {\n  method: "POST",\n  headers: { "Content-Type": "application/json" },\n  body: JSON.stringify(${body})\n});\n\nconst data = await resp.json();\nconsole.log(data);`
+            };
+
+            document.getElementById('snippetCode').textContent = snippets[activeLang];
+        }
+
+        document.querySelector('.snippet-tabs').addEventListener('click', (e) => {
+            const tab = e.target.closest('.snippet-tab');
+            if (!tab) return;
+            document.querySelectorAll('.snippet-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            activeLang = tab.dataset.lang;
+            updateSnippet();
+        });
+
+        document.getElementById('btnCopy').addEventListener('click', () => {
+            navigator.clipboard.writeText(document.getElementById('snippetCode').textContent);
+            const btn = document.getElementById('btnCopy');
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = 'Copy', 1500);
+        });
+
+        // Listen for input changes to update snippets
+        document.querySelectorAll('.text-input, .textarea-input').forEach(i => {
+            i.addEventListener('input', updateSnippet);
+        });
+
+        updateSnippet();
+    </script>
+</body>
+
+</html>

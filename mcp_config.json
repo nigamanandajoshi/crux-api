@@ -1,0 +1,13 @@
+{
+    "mcpServers": {
+        "doc-squeeze": {
+            "command": "python",
+            "args": [
+                "mcp_server.py"
+            ],
+            "env": {
+                "DOC_SQUEEZE_URL": "http://localhost:8000"
+            }
+        }
+    }
+}

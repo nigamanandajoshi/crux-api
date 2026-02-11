@@ -1,117 +1,254 @@
 {
-  "skill": {
-    "name": "doc-squeeze-free",
-    "version": "0.1.0",
-    "description": "Reads any documentation URL and returns clean, filtered markdown. Powered by Jina Reader (free) + Groq LLM (free).",
-    "author": "openclaw",
-    "license": "MIT",
-    "tags": ["documentation", "scraping", "markdown", "reader", "free-tier"],
-    "repository": "https://github.com/openclaw/doc-squeeze",
-    "homepage": "https://doc-squeeze.onrender.com"
-  },
-
-  "runtime": {
-    "language": "python",
-    "version": ">=3.9",
-    "framework": "fastapi",
-    "entry": "main.py",
-    "deploy": {
-      "platform": "render",
-      "plan": "free",
-      "blueprint": "render.yaml",
-      "health_check": "/health"
-    }
-  },
-
-  "tools": [
-    {
-      "name": "squeeze_url",
-      "description": "Fetches a documentation URL and returns its content as clean markdown. Optionally filters to a specific topic using an LLM.",
-      "endpoint": {
-        "method": "POST",
-        "path": "/api/squeeze"
-      },
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "url": {
-            "type": "string",
-            "format": "uri",
-            "description": "The full URL of the documentation page to read."
-          },
-          "focus": {
-            "type": "string",
-            "description": "Optional topic to filter the documentation to (e.g., 'authentication', 'error handling', 'rate limits'). When provided, an LLM extracts only relevant sections.",
-            "default": null
-          }
-        },
-        "required": ["url"]
-      },
-      "output_schema": {
-        "type": "object",
-        "properties": {
-          "status": {
-            "type": "string",
-            "enum": ["success"],
-            "description": "Request status."
-          },
-          "markdown": {
-            "type": "string",
-            "description": "The documentation content as clean markdown."
-          },
-          "source": {
-            "type": "string",
-            "description": "The upstream provider used for fetching."
-          },
-          "char_count": {
-            "type": "integer",
-            "description": "Character count of the returned markdown."
-          },
-          "was_filtered": {
-            "type": "boolean",
-            "description": "Whether LLM filtering was applied."
-          }
+    "skill": {
+        "name": "doc-squeeze",
+        "version": "1.0.0",
+        "description": "Knowledge extraction API for AI agents. Fetch docs as markdown, extract structured JSON, batch-process URLs, and search within documents.",
+        "author": "openclaw",
+        "license": "MIT",
+        "tags": [
+            "documentation",
+            "extraction",
+            "search",
+            "markdown",
+            "structured-data",
+            "free-tier"
+        ],
+        "repository": "https://github.com/openclaw/doc-squeeze",
+        "homepage": "https://doc-squeeze.onrender.com"
+    },
+    "runtime": {
+        "language": "python",
+        "version": ">=3.9",
+        "framework": "fastapi",
+        "entry": "main.py",
+        "mcp_server": "mcp_server.py",
+        "deploy": {
+            "platform": "render",
+            "plan": "free",
+            "blueprint": "render.yaml",
+            "health_check": "/health"
         }
-      },
-      "errors": [
-        { "code": 422, "description": "Invalid URL or Jina returned empty content." },
-        { "code": 502, "description": "Jina Reader request failed." },
-        { "code": 504, "description": "Jina Reader timed out." }
-      ],
-      "examples": [
+    },
+    "discovery": {
+        "openai_plugin": "/.well-known/ai-plugin.json",
+        "mcp": "/.well-known/mcp.json",
+        "openapi": "/openapi.json",
+        "skill_manifest": "/api/skill"
+    },
+    "tools": [
         {
-          "name": "Basic fetch",
-          "input": { "url": "https://docs.stripe.com/api" },
-          "description": "Fetch full Stripe API docs as markdown."
+            "name": "squeeze_url",
+            "description": "Fetch a documentation URL and return its content as clean markdown. Optionally filter to a specific topic.",
+            "endpoint": {
+                "method": "POST",
+                "path": "/api/squeeze"
+            },
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "The URL to read."
+                    },
+                    "focus": {
+                        "type": "string",
+                        "description": "Optional topic to filter to.",
+                        "default": null
+                    }
+                },
+                "required": [
+                    "url"
+                ]
+            },
+            "output_schema": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string"
+                    },
+                    "markdown": {
+                        "type": "string"
+                    },
+                    "char_count": {
+                        "type": "integer"
+                    },
+                    "raw_char_count": {
+                        "type": "integer"
+                    },
+                    "was_filtered": {
+                        "type": "boolean"
+                    },
+                    "cached": {
+                        "type": "boolean"
+                    },
+                    "timing": {
+                        "type": "object"
+                    }
+                }
+            }
         },
         {
-          "name": "Focused fetch",
-          "input": { "url": "https://docs.stripe.com/api", "focus": "error handling" },
-          "description": "Fetch only error-handling sections from Stripe docs."
+            "name": "extract_structured",
+            "description": "Extract structured JSON data from a URL using a schema definition. Returns typed, parseable data instead of raw markdown.",
+            "endpoint": {
+                "method": "POST",
+                "path": "/api/extract"
+            },
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "URL to extract from."
+                    },
+                    "schema_definition": {
+                        "type": "object",
+                        "description": "JSON schema defining the structure to extract."
+                    },
+                    "instructions": {
+                        "type": "string",
+                        "description": "Optional extraction guidance."
+                    }
+                },
+                "required": [
+                    "url",
+                    "schema_definition"
+                ]
+            },
+            "output_schema": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string"
+                    },
+                    "data": {
+                        "type": "object",
+                        "description": "Extracted structured data matching the schema."
+                    },
+                    "confidence": {
+                        "type": "number"
+                    },
+                    "cached": {
+                        "type": "boolean"
+                    },
+                    "timing": {
+                        "type": "object"
+                    }
+                }
+            }
+        },
+        {
+            "name": "search_docs",
+            "description": "Search within a documentation page for answers to a specific query. Returns relevant sections with relevance scores.",
+            "endpoint": {
+                "method": "POST",
+                "path": "/api/search"
+            },
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "URL to search within."
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "What to search for."
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "default": 3,
+                        "description": "Max results (1-10)."
+                    }
+                },
+                "required": [
+                    "url",
+                    "query"
+                ]
+            },
+            "output_schema": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string"
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "type": "object"
+                        }
+                    },
+                    "cached": {
+                        "type": "boolean"
+                    },
+                    "timing": {
+                        "type": "object"
+                    }
+                }
+            }
+        },
+        {
+            "name": "batch_squeeze",
+            "description": "Fetch multiple URLs in parallel. Up to 10 URLs per request.",
+            "endpoint": {
+                "method": "POST",
+                "path": "/api/batch"
+            },
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "urls": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "uri"
+                        },
+                        "description": "URLs to fetch (max 10)."
+                    },
+                    "focus": {
+                        "type": "string",
+                        "description": "Optional topic filter."
+                    }
+                },
+                "required": [
+                    "urls"
+                ]
+            }
         }
-      ]
-    }
-  ],
-
-  "permissions": {
-    "network": [
-      {
-        "host": "r.jina.ai",
-        "reason": "Fetches documentation URLs as markdown via Jina Reader API."
-      },
-      {
-        "host": "api.groq.com",
-        "reason": "Optional LLM-based filtering when a focus topic is provided.",
-        "required": false
-      }
     ],
-    "filesystem": false,
-    "secrets": [
-      {
-        "key": "GROQ_API_KEY",
-        "description": "Groq API key for LLM filtering. Free at https://console.groq.com/keys",
-        "required": false
-      }
-    ]
-  }
+    "agent_instructions": {
+        "when_to_use": "Use Doc-Squeeze when you need to read documentation, extract data from web pages, or search within docs for specific answers.",
+        "quick_start": "POST /api/squeeze with {\"url\": \"<url>\"} for markdown. POST /api/extract with {\"url\": \"<url>\", \"schema_definition\": {...}} for structured data.",
+        "tips": [
+            "Use /api/extract when you need typed data — don't parse markdown yourself.",
+            "Use /api/search when you need answers to specific questions, not the whole page.",
+            "Use /api/batch when reading multiple related doc pages.",
+            "All responses include cache status — repeated requests are <50ms.",
+            "No authentication required for basic usage. Generate an API key at /api/keys/create for higher limits."
+        ]
+    },
+    "permissions": {
+        "network": [
+            {
+                "host": "r.jina.ai",
+                "reason": "Fetches documentation URLs as markdown."
+            },
+            {
+                "host": "api.groq.com",
+                "reason": "LLM-based filtering, extraction, and search.",
+                "required": false
+            }
+        ],
+        "filesystem": false,
+        "secrets": [
+            {
+                "key": "GROQ_API_KEY",
+                "description": "Groq API key for LLM features. Free at https://console.groq.com/keys",
+                "required": false
+            }
+        ]
+    }
 }

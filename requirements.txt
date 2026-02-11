@@ -1,6 +1,30 @@
+# Core Framework
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
-requests==2.32.3
-groq==0.15.0
-python-dotenv==1.0.1
 pydantic==2.10.5
+pydantic-settings==2.7.0
+
+# HTTP Clients (async support)
+httpx==0.28.1
+requests==2.32.3
+
+# AI/LLM
+groq==0.15.0
+
+# Security & Rate Limiting
+slowapi==0.1.9
+
+# Reliability
+tenacity==9.0.0
+
+# Environment & Config
+python-dotenv==1.0.1
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0
+
+# Code Quality
+ruff==0.8.4
+mypy==1.13.0
