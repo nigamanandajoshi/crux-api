@@ -132,10 +132,12 @@ def test_rate_limiting():
 # ── Settings Configuration ───────────────────────────────────────────────────
 def test_settings_default_values():
     """Test that settings have correct default values."""
-    test_settings = Settings()
-    assert test_settings.port == 8000
-    assert test_settings.env == "development"
-    assert test_settings.jina_timeout == 30
+    # Clear env vars that pydantic-settings would pick up, so we test true defaults
+    with patch.dict(os.environ, {}, clear=True):
+        test_settings = Settings(_env_file=None)
+        assert test_settings.port == 8000
+        assert test_settings.env == "development"
+        assert test_settings.jina_timeout == 30
 
 
 def test_settings_cors_origins_parsing():
