@@ -26,7 +26,9 @@ import requests
 BASE = os.environ.get("BASE_URL", "http://localhost:8000")
 PASS = "✅"
 FAIL = "❌"
+SKIP = "⏭️"
 results = []
+skipped = []
 
 
 def test(name, passed, detail=""):
@@ -35,6 +37,15 @@ def test(name, passed, detail=""):
     print(f"  {status} {name}")
     if detail:
         print(f"     ↳ {detail}")
+    print()
+
+
+def skip(name, reason=""):
+    """Mark a test as skipped (not counted as pass or fail)."""
+    skipped.append(name)
+    print(f"  {SKIP} {name} (skipped)")
+    if reason:
+        print(f"     ↳ {reason}")
     print()
 
 
@@ -50,10 +61,11 @@ def main():
     try:
         r = requests.get(f"{BASE}/health", timeout=5)
         data = r.json()
+        groq_available = data.get("groq_configured", False)
         test(
             "Server is healthy",
             data["status"] == "healthy",
-            f"version={data['version']}, groq={data['groq_configured']}, env={data.get('environment', 'unknown')}"
+            f"version={data['version']}, groq={groq_available}, env={data.get('environment', 'unknown')}"
         )
         test(
             "Cache stats in health",
@@ -232,8 +244,12 @@ def main():
     if r.status_code == 200:
         data = r.json()
         test("Filtered returns 200", True)
-        test("Was filtered by Groq", data["was_filtered"] is True)
-        test("Has model_used", data.get("model_used") is not None, f"model={data.get('model_used')}")
+        if groq_available:
+            test("Was filtered by Groq", data["was_filtered"] is True)
+            test("Has model_used", data.get("model_used") is not None, f"model={data.get('model_used')}")
+        else:
+            skip("Was filtered by Groq", "GROQ_API_KEY not configured")
+            skip("Has model_used", "GROQ_API_KEY not configured")
         test(
             "Mentions 'dumps'",
             "dumps" in data["markdown"].lower(),
@@ -244,47 +260,53 @@ def main():
 
     # ── Test 11: Structured Extraction ────────────────────────
     print("─── Test 11: Structured Extraction ───")
-    start = time.time()
-    r = requests.post(f"{BASE}/api/extract", json={
-        "url": "https://example.com",
-        "schema_definition": {
-            "title": "str",
-            "description": "str",
-            "links": ["str"]
-        }
-    }, timeout=60)
-    elapsed = round(time.time() - start, 2)
-
-    if r.status_code == 200:
-        data = r.json()
-        test("Extract returns 200", True)
-        test("Has extracted data", "data" in data and isinstance(data["data"], dict))
-        test("Has confidence score", 0 <= data.get("confidence", -1) <= 1, f"confidence={data.get('confidence')}")
-        test("Has timing", "timing" in data, f"total_ms={data['timing']['total_ms']}")
+    if not groq_available:
+        skip("Extract returns 200", "GROQ_API_KEY not configured — extraction requires Groq")
     else:
-        test("Extract returns 200", False, f"Got {r.status_code}: {r.text[:100]}")
+        start = time.time()
+        r = requests.post(f"{BASE}/api/extract", json={
+            "url": "https://example.com",
+            "schema_definition": {
+                "title": "str",
+                "description": "str",
+                "links": ["str"]
+            }
+        }, timeout=60)
+        elapsed = round(time.time() - start, 2)
+
+        if r.status_code == 200:
+            data = r.json()
+            test("Extract returns 200", True)
+            test("Has extracted data", "data" in data and isinstance(data["data"], dict))
+            test("Has confidence score", 0 <= data.get("confidence", -1) <= 1, f"confidence={data.get('confidence')}")
+            test("Has timing", "timing" in data, f"total_ms={data['timing']['total_ms']}")
+        else:
+            test("Extract returns 200", False, f"Got {r.status_code}: {r.text[:100]}")
 
     # ── Test 12: Deep Search ──────────────────────────────────
     print("─── Test 12: Deep Search ───")
-    start = time.time()
-    r = requests.post(f"{BASE}/api/search", json={
-        "url": "https://docs.python.org/3/library/json.html",
-        "query": "How to serialize custom objects?",
-        "max_results": 3
-    }, timeout=60)
-    elapsed = round(time.time() - start, 2)
-
-    if r.status_code == 200:
-        data = r.json()
-        test("Search returns 200", True)
-        test("Has results", len(data.get("results", [])) > 0, f"found {len(data.get('results', []))} results")
-        if data.get("results"):
-            first = data["results"][0]
-            test("Results have section", "section" in first)
-            test("Results have content", "content" in first)
-            test("Results have relevance", 0 <= first.get("relevance", -1) <= 1, f"relevance={first.get('relevance')}")
+    if not groq_available:
+        skip("Search returns 200", "GROQ_API_KEY not configured — search requires Groq")
     else:
-        test("Search returns 200", False, f"Got {r.status_code}: {r.text[:100]}")
+        start = time.time()
+        r = requests.post(f"{BASE}/api/search", json={
+            "url": "https://docs.python.org/3/library/json.html",
+            "query": "How to serialize custom objects?",
+            "max_results": 3
+        }, timeout=60)
+        elapsed = round(time.time() - start, 2)
+
+        if r.status_code == 200:
+            data = r.json()
+            test("Search returns 200", True)
+            test("Has results", len(data.get("results", [])) > 0, f"found {len(data.get('results', []))} results")
+            if data.get("results"):
+                first = data["results"][0]
+                test("Results have section", "section" in first)
+                test("Results have content", "content" in first)
+                test("Results have relevance", 0 <= first.get("relevance", -1) <= 1, f"relevance={first.get('relevance')}")
+        else:
+            test("Search returns 200", False, f"Got {r.status_code}: {r.text[:100]}")
 
     # ── Test 13: Batch Processing ─────────────────────────────
     print("─── Test 13: Batch Processing ───")
@@ -342,15 +364,24 @@ def main():
     total = len(results)
     passed = sum(1 for _, p in results if p)
     failed = total - passed
+    skipped_count = len(skipped)
 
     print("=" * 60)
     print(f"📊  RESULTS: {passed}/{total} passed", end="")
+    if skipped_count:
+        print(f", {skipped_count} skipped", end="")
     if failed:
         print(f"  ({failed} failed)")
     else:
         print("  — ALL TESTS PASSED! 🎉")
     print("=" * 60)
     print()
+
+    if skipped_count:
+        print("Skipped tests:")
+        for name in skipped:
+            print(f"  {SKIP} {name}")
+        print()
 
     if failed:
         print("Failed tests:")
