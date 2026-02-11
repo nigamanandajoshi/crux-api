@@ -1,10 +1,14 @@
 [tool.pytest.ini_options]
 minversion = "8.0"
-addopts = "-ra -q --strict-markers --cov=main --cov-report=term-missing --cov-report=html"
+addopts = "-ra -q --strict-markers --cov=main --cov-report=term-missing"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+asyncio_mode = "auto"
+markers = [
+    "asyncio: mark a test as an asyncio coroutine",
+]
 
 [tool.coverage.run]
 source = ["."]

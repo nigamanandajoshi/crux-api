@@ -296,7 +296,7 @@ def get_api_tier(api_key: Optional[str]) -> str:
     key_data = API_KEYS.get(api_key)
     if not key_data:
         return "free"
-    return key_data.get("tier", "dev")
+    return str(key_data.get("tier", "dev"))
 
 
 # Tier-based rate limits (generous for launch — all features free)
@@ -333,7 +333,7 @@ app = FastAPI(
 # Rate limiter
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore
 
 # Gzip compression for responses > 1KB
 app.add_middleware(GZipMiddleware, minimum_size=1000)
@@ -797,13 +797,19 @@ async def squeeze(request: Request, req: SqueezeRequest):
         "was_filtered": was_filtered,
         "model_used": model_used,
     }
-
-    # Cache the result (without timing — timing is added per-request)
     content_cache.set(cache_key, result, ttl=settings.cache_ttl)
 
-    result["timing"] = TimingInfo(fetch_ms=fetch_ms, filter_ms=filter_ms, total_ms=total_ms)
-    result["cached"] = False
-    return SqueezeResponse(**result)
+    return SqueezeResponse(
+        status="success",
+        markdown=final_md,
+        source="jina.ai",
+        char_count=len(final_md),
+        raw_char_count=len(raw_md),
+        was_filtered=was_filtered,
+        model_used=model_used,
+        timing=TimingInfo(fetch_ms=fetch_ms, filter_ms=filter_ms, total_ms=total_ms),
+        cached=False,
+    )
 
 
 # ── Structured Extraction ────────────────────────────────────────────────────
@@ -1140,9 +1146,15 @@ async def search_docs(request: Request, req: SearchRequest):
     }
     content_cache.set(cache_key, result, ttl=settings.cache_ttl)
 
-    result["timing"] = TimingInfo(fetch_ms=fetch_ms, total_ms=total_ms)
-    result["cached"] = False
-    return SearchResponse(**result)
+
+    return SearchResponse(
+        status="success",
+        query=req.query,
+        results=results,
+        source_url=target,
+        timing=TimingInfo(fetch_ms=fetch_ms, total_ms=total_ms),
+        cached=False,
+    )
 
 
 # ── Cache Management ─────────────────────────────────────────────────────────
